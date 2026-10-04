@@ -3,12 +3,9 @@ title: "BIOS 640 - Assignment Week 3"
 author: "Anita Adjei"
 date: "26th September, 2026"
 output:
-  html_document:
-    theme: flatly
-    highlight: tango
+  pdf_document:
     toc: true
-    toc_float: true
-    toc_depth: 2
+    toc_depth: 3
     number_sections: true
 ---
 
@@ -21,8 +18,9 @@ library(ggplot2)
 library(cowplot)
 library(ggpubr)
 library(tidyr)
-library(DT)
 ```
+
+\newpage
 
 # Exercise 1: Reproducing and arranging ggplot2 figures
 
@@ -53,11 +51,7 @@ The reference figures were produced from an adult NHANES extract and do not show
 nhanes_ex1 <- nhanes %>% filter(age >= 18)
 ```
 
-## Figures {.tabset}
-
-### Individual figures
-
-#### Figure 1: Age distribution by gender
+## Figure 1: Age distribution by gender
 
 ```{r ex1-fig1}
 fig1 <- ggplot(nhanes_ex1, aes(x = age, fill = gender)) +
@@ -67,7 +61,7 @@ fig1 <- ggplot(nhanes_ex1, aes(x = age, fill = gender)) +
 fig1
 ```
 
-#### Figure 2: Gender proportion within each ethnicity group
+## Figure 2: Gender proportion within each ethnicity group
 
 ```{r ex1-fig2}
 fig2 <- ggplot(nhanes_ex1, aes(x = ethnicity_2, fill = gender)) +
@@ -77,16 +71,14 @@ fig2 <- ggplot(nhanes_ex1, aes(x = ethnicity_2, fill = gender)) +
 fig2
 ```
 
-### Combined figures
-
-#### Combining with `plot_grid()`
+## Combining with `plot_grid()`
 
 ```{r ex1-cowplot}
 combined_cowplot <- plot_grid(fig1, fig2, ncol = 1, labels = c("A", "B"))
 combined_cowplot
 ```
 
-#### Combining with `ggarrange()`
+## Combining with `ggarrange()`
 
 ```{r ex1-ggarrange}
 combined_ggarrange <- ggarrange(fig1, fig2, ncol = 1, labels = c("A", "B"),
@@ -98,16 +90,9 @@ combined_ggarrange
 
 Both functions stack the two figures into a single output, but they make different trade-offs for this pair of plots. `plot_grid()` keeps each plot's own legend, so the reader sees the "Gender" legend twice, once per panel; this is redundant since both figures use the same fill mapping. `ggarrange()`, on the other hand, lets a single shared legend (`common.legend = TRUE`) be pulled out and placed once for the whole figure, which removes the duplication and gives each individual plot a little more horizontal room. For this specific pair of plots, `ggarrange()` produces the cleaner layout, because the legend is identical across both panels and does not need to be repeated. `plot_grid()` would be the better choice if the two plots had different legends that both needed to stay visible.
 
+\newpage
+
 # Exercise 2: Visualizing key characteristics
-
-## The cleaned NHANES dataset
-
-The table below lets you sort, search and page through the cleaned NHANES data used in this report.
-
-```{r ex2-dt}
-DT::datatable(nhanes, filter = "top", rownames = FALSE,
-              options = list(pageLength = 10, scrollX = TRUE))
-```
 
 ## Age
 
@@ -121,7 +106,7 @@ p_age <- ggplot(nhanes, aes(x = age)) +
        x = "Age (years)", y = "Count")
 p_age
 
-ggsave(here("figures", "age_distribution.png"), p_age, width = 6, height = 4)
+ggsave("age_distribution.png", p_age, width = 6, height = 4)
 ```
 
 Age ranges from 0 to 80 years and is fairly right-skewed toward younger ages: the largest single bin is 0-5 years, and counts generally decline (with some fluctuation) as age increases, before rising again slightly around retirement age. There are no missing values for age.
@@ -138,7 +123,7 @@ p_gender <- ggplot(nhanes, aes(x = gender, fill = gender)) +
        x = "Gender", y = "Count", fill = "Gender")
 p_gender
 
-ggsave(here("figures", "gender_distribution.png"), p_gender, width = 6, height = 4)
+ggsave("gender_distribution.png", p_gender, width = 6, height = 4)
 ```
 
 Gender is close to evenly split, with 14,452 males and 14,948 females, and no missing values.
@@ -156,7 +141,7 @@ p_eth1 <- ggplot(nhanes, aes(x = ethnicity_1, fill = ethnicity_1)) +
   theme(legend.position = "none")
 p_eth1
 
-ggsave(here("figures", "ethnicity1_distribution.png"), p_eth1, width = 6, height = 4)
+ggsave("ethnicity1_distribution.png", p_eth1, width = 6, height = 4)
 ```
 
 ## Ethnicity: variable 2 (RIDRETH3)
@@ -172,7 +157,7 @@ p_eth2 <- ggplot(nhanes, aes(x = ethnicity_2, fill = ethnicity_2)) +
   theme(legend.position = "none")
 p_eth2
 
-ggsave(here("figures", "ethnicity2_distribution.png"), p_eth2, width = 6, height = 4)
+ggsave("ethnicity2_distribution.png", p_eth2, width = 6, height = 4)
 ```
 
 Both ethnicity variables are dominated by the White category, followed by Black and Mexican participants, and neither has any missing values. The two variables differ mainly in how the remaining participants are grouped: the 5-category version (`ethnicity_1`) lumps every non-White/Black/Mexican/Other-Hispanic participant into a single "Other" category, while the 6-category version (`ethnicity_2`) carves the Asian participants (n = 3,284) out of that catch-all group.
@@ -184,6 +169,8 @@ Both ethnicity variables are dominated by the White category, followed by Black 
 ```{r ex2-remove}
 nhanes <- nhanes %>% select(-ethnicity_1)
 ```
+
+\newpage
 
 # Exercise 3: Improving a ggplot figure
 
@@ -229,12 +216,14 @@ fig3 <- ggplot(diet, aes(x = Week, y = weight_change, group = Participant)) +
         panel.grid.minor = element_blank())
 fig3
 
-ggsave(here("figures", "diet_weight_change_faceted.png"), fig3, width = 10, height = 8)
+ggsave("diet_weight_change_faceted.png", fig3, width = 10, height = 8)
 ```
 
 ## Interpretation of the improved figure
 
 The faceted version makes each participant's own trend immediately readable against the zero line, at the cost of no longer overlaying all 20 trajectories in one panel. For this dataset that trade-off is worth it, because tracing 20 overlapping lines was the original figure's main problem. Most participants show a downward trend, consistent with weight loss on the diet, while a small number show flat or slightly increasing trajectories.
+
+\newpage
 
 # Exercise 4: Exploring relationships through visualizations
 
