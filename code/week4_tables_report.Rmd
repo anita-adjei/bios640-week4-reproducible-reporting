@@ -1,0 +1,126 @@
+---
+title: "Describing the Cleaned NHANES Dataset"
+author: "Anita Adjei"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  pdf_document:
+    number_sections: true
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(rio)
+library(here)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(kableExtra)
+options(knitr.kable.NA = "")
+
+nhanes <- import(here("data", "cleaned_NHANES.csv")) %>%
+  mutate(
+    avg_sbp = rowMeans(cbind(systolic_bp_1, systolic_bp_2,
+                             systolic_bp_3, systolic_bp_4), na.rm = TRUE),
+    avg_sbp = ifelse(is.nan(avg_sbp), NA, avg_sbp),
+    ethnicity_2 = factor(ethnicity_2,
+                         levels = c("Mexican", "Other Hispanic", "White",
+                                    "Black", "Asian", "Other"))
+  )
+```
+
+# Introduction
+
+The National Health and Nutrition Examination Survey (NHANES) is a programme of studies run by the US National Center for Health Statistics that combines interviews and physical examinations to assess the health and nutritional status of the US population [@nhanes]. This report describes the cleaned NHANES extract used in this course, which covers `r format(nrow(nhanes), big.mark = ",")` participants across three waves (`r paste(sort(unique(nhanes$wave_id)), collapse = ", ")`). It summarises who is in each wave (sample size, sex and ethnicity) and how average systolic blood pressure compares across waves.
+
+The dataset keeps the original NHANES labels `gender` and `ethnicity`. These actually capture biological sex and race, so I refer to them as sex and ethnicity (as labelled) below.
+
+# Participants in each wave
+
+```{r demo-data}
+size_tab <- nhanes %>% count(wave_id, name = "n") %>%
+  mutate(pct = NA_real_, Characteristic = "All participants", grp = "Sample size")
+
+sex_tab <- nhanes %>% group_by(wave_id) %>%
+  summarise(n = sum(gender == "Male"), pct = 100 * n / n(), .groups = "drop") %>%
+  mutate(Characteristic = "Male", grp = "Sex")
+
+eth_tab <- nhanes %>% count(wave_id, ethnicity_2, name = "n") %>%
+  group_by(wave_id) %>% mutate(pct = 100 * n / sum(n)) %>% ungroup() %>%
+  mutate(Characteristic = as.character(ethnicity_2), grp = "Ethnicity") %>%
+  select(-ethnicity_2)
+
+demo <- bind_rows(size_tab, sex_tab, eth_tab) %>%
+  mutate(Characteristic = factor(Characteristic,
+           levels = c("All participants", "Male", levels(nhanes$ethnicity_2)))) %>%
+  arrange(Characteristic) %>%
+  select(-grp) %>%
+  pivot_wider(names_from = wave_id, values_from = c(n, pct),
+              names_glue = "{wave_id}_{.value}", names_vary = "slowest")
+
+waves <- sort(unique(nhanes$wave_id))
+```
+
+Table 1 gives the number of participants in each wave, the number and percentage of males, and the number and percentage of participants in each ethnic group. Percentages are calculated within each wave.
+
+```{r demo-table}
+demo %>%
+  kable(format = "latex", booktabs = TRUE, linesep = "",
+        digits = c(0, rep(c(0, 1), length(waves))),
+        format.args = list(big.mark = ","),
+        col.names = c("", rep(c("n", "%"), length(waves))),
+        caption = "Sample size, sex and ethnicity of NHANES participants by wave") %>%
+  kable_styling(latex_options = c("hold_position", "striped"), font_size = 10) %>%
+  add_header_above(c(" " = 1, setNames(rep(2, length(waves)), waves))) %>%
+  pack_rows("Sample size", 1, 1) %>%
+  pack_rows("Sex", 2, 2) %>%
+  pack_rows("Ethnicity", 3, 8) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, width = "4cm") %>%
+  footnote(general = "Percentages are within wave. Ethnicity uses the six-category NHANES variable (RIDRETH3).",
+           general_title = "Note: ", footnote_as_chunk = TRUE, threeparttable = TRUE)
+```
+
+```{r demo-numbers}
+male_rng <- range(demo[demo$Characteristic == "Male", grepl("pct", names(demo))])
+white_rng <- range(demo[demo$Characteristic == "White", grepl("pct", names(demo))])
+n_rng <- range(demo[demo$Characteristic == "All participants", grepl("_n$", names(demo))])
+```
+
+Each wave contains between `r format(n_rng[1], big.mark = ",")` and `r format(n_rng[2], big.mark = ",")` participants. The sex balance is stable, with males making up `r sprintf("%.1f", male_rng[1])`% to `r sprintf("%.1f", male_rng[2])`% of each wave. White participants are the largest ethnic group in every wave (`r sprintf("%.1f", white_rng[1])`% to `r sprintf("%.1f", white_rng[2])`%), followed by Black and Mexican participants, so the three waves have a similar composition.
+
+# Average systolic blood pressure by wave
+
+Each participant's average systolic blood pressure is the mean of up to four readings, and is missing only if no reading was recorded. Table 2 summarises it for each wave using only participants with a value.
+
+```{r sbp-table}
+sbp <- nhanes %>% filter(!is.na(avg_sbp)) %>%
+  group_by(wave_id) %>%
+  summarise(N = n(), Minimum = min(avg_sbp), Maximum = max(avg_sbp),
+            Median = median(avg_sbp), Mean = mean(avg_sbp), SD = sd(avg_sbp),
+            .groups = "drop") %>%
+  rename(Wave = wave_id)
+
+sbp %>%
+  kable(format = "latex", booktabs = TRUE, linesep = "", digits = c(0, 0, 1, 1, 1, 1, 1),
+        format.args = list(big.mark = ","),
+        caption = "Average systolic blood pressure (mm Hg) by wave") %>%
+  kable_styling(latex_options = c("hold_position", "striped"), font_size = 10) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(6, bold = TRUE, color = "red") %>%
+  footnote(general = "Mean is highlighted. SD = standard deviation. N = participants with at least one blood pressure reading.",
+           general_title = "Note: ", footnote_as_chunk = TRUE, threeparttable = TRUE)
+```
+
+```{r sbp-numbers}
+hi <- sbp[which.max(sbp$Mean), ]
+lo <- sbp[which.min(sbp$Mean), ]
+```
+
+Mean systolic blood pressure is highest in wave `r hi$Wave` (`r sprintf("%.1f", hi$Mean)` mm Hg) and lowest in wave `r lo$Wave` (`r sprintf("%.1f", lo$Mean)` mm Hg), a difference of `r sprintf("%.1f", hi$Mean - lo$Mean)` mm Hg. In every wave the median is a little below the mean, which suggests a right-skewed distribution with a tail of high readings (maximum above 220 mm Hg in all waves). The standard deviation is about 18 to 20 mm Hg in each wave, so variability is similar across waves.
+
+# Summary
+
+The three NHANES waves are similar in size, sex balance and ethnic composition, so differences in blood pressure between waves are unlikely to be due to large shifts in who was sampled. These tables are descriptive and do not account for age, which differs between people and strongly affects blood pressure.
+
+# References
