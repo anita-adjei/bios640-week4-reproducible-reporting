@@ -1,0 +1,342 @@
+---
+title: "BIOS 640 - Assignment Week 3"
+author: "Anita Adjei"
+date: "26th September, 2026"
+output:
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(rio)
+library(here)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(ggpubr)
+library(tidyr)
+library(DT)
+```
+
+# Exercise 1: Reproducing and arranging ggplot2 figures
+
+## Data import and recoding
+
+```{r ex1-data}
+nhanes <- import(here("data", "cleaned_NHANES.csv"))
+```
+
+The raw NHANES columns used in the target figures were `RIAGENDR` (gender, coded 1 = Male, 2 = Female) and `RIDRETH3` (ethnicity, coded 1 = Mexican, 2 = Other Hispanic, 3 = White, 4 = Black, 6 = Asian, 7 = Other). The cleaned dataset already supplies the meaningful labels, so the only recoding needed here is to set the factor levels to match the original numeric order.
+
+```{r ex1-relevel}
+nhanes <- nhanes %>%
+  mutate(
+    gender = factor(gender, levels = c("Male", "Female")),
+    ethnicity_2 = factor(ethnicity_2,
+                         levels = c("Mexican", "Other Hispanic", "White",
+                                    "Black", "Asian", "Other"))
+  )
+
+table(nhanes$gender)
+table(nhanes$ethnicity_2)
+```
+
+The reference figures were produced from an adult NHANES extract and do not show participants below about age 18, while `cleaned_NHANES.csv` still contains children. To reproduce the reference figures as closely as possible, the two Exercise 1 figures are drawn from participants aged 18 and above. The full dataset is retained for the later exercises.
+
+```{r ex1-subset}
+nhanes_ex1 <- nhanes %>% filter(age >= 18)
+```
+
+## Figures {.tabset}
+
+### Individual figures
+
+#### Figure 1: Age distribution by gender
+
+```{r ex1-fig1}
+fig1 <- ggplot(nhanes_ex1, aes(x = age, fill = gender)) +
+  geom_histogram(binwidth = 5, boundary = 0, position = "dodge") +
+  labs(title = "Age Distribution by Gender",
+       x = "Age (years)", y = "Count", fill = "Gender")
+fig1
+```
+
+#### Figure 2: Gender proportion within each ethnicity group
+
+```{r ex1-fig2}
+fig2 <- ggplot(nhanes_ex1, aes(x = ethnicity_2, fill = gender)) +
+  geom_bar(position = "fill") +
+  labs(title = "Gender Proportion within Each Ethnicity Group",
+       x = "Ethnicity", y = "Proportion", fill = "Gender")
+fig2
+```
+
+### Combined figures
+
+#### Combining with `plot_grid()`
+
+```{r ex1-cowplot}
+combined_cowplot <- plot_grid(fig1, fig2, ncol = 1, labels = c("A", "B"))
+combined_cowplot
+```
+
+#### Combining with `ggarrange()`
+
+```{r ex1-ggarrange}
+combined_ggarrange <- ggarrange(fig1, fig2, ncol = 1, labels = c("A", "B"),
+                                common.legend = TRUE, legend = "right")
+combined_ggarrange
+```
+
+## Comparison of `plot_grid()` and `ggarrange()`
+
+Both functions stack the two figures into a single output, but they make different trade-offs for this pair of plots. `plot_grid()` keeps each plot's own legend, so the reader sees the "Gender" legend twice, once per panel; this is redundant since both figures use the same fill mapping. `ggarrange()`, on the other hand, lets a single shared legend (`common.legend = TRUE`) be pulled out and placed once for the whole figure, which removes the duplication and gives each individual plot a little more horizontal room. For this specific pair of plots, `ggarrange()` produces the cleaner layout, because the legend is identical across both panels and does not need to be repeated. `plot_grid()` would be the better choice if the two plots had different legends that both needed to stay visible.
+
+# Exercise 2: Visualizing key characteristics
+
+## The cleaned NHANES dataset
+
+The table below lets you sort, search and page through the cleaned NHANES data used in this report.
+
+```{r ex2-dt}
+DT::datatable(nhanes, filter = "top", rownames = FALSE,
+              options = list(pageLength = 10, scrollX = TRUE))
+```
+
+## Age
+
+```{r ex2-age}
+n_missing_age <- sum(is.na(nhanes$age))
+n_missing_age
+
+p_age <- ggplot(nhanes, aes(x = age)) +
+  geom_histogram(binwidth = 5, boundary = 0, fill = "steelblue", color = "white") +
+  labs(title = "Distribution of Age",
+       x = "Age (years)", y = "Count")
+p_age
+
+ggsave(here("figures", "age_distribution.png"), p_age, width = 6, height = 4)
+```
+
+Age ranges from 0 to 80 years and is fairly right-skewed toward younger ages: the largest single bin is 0-5 years, and counts generally decline (with some fluctuation) as age increases, before rising again slightly around retirement age. There are no missing values for age.
+
+## Gender
+
+```{r ex2-gender}
+n_missing_gender <- sum(is.na(nhanes$gender))
+n_missing_gender
+
+p_gender <- ggplot(nhanes, aes(x = gender, fill = gender)) +
+  geom_bar() +
+  labs(title = "Distribution of Gender",
+       x = "Gender", y = "Count", fill = "Gender")
+p_gender
+
+ggsave(here("figures", "gender_distribution.png"), p_gender, width = 6, height = 4)
+```
+
+Gender is close to evenly split, with 14,452 males and 14,948 females, and no missing values.
+
+## Ethnicity: variable 1 (RIDRETH1)
+
+```{r ex2-eth1}
+n_missing_eth1 <- sum(is.na(nhanes$ethnicity_1))
+n_missing_eth1
+
+p_eth1 <- ggplot(nhanes, aes(x = ethnicity_1, fill = ethnicity_1)) +
+  geom_bar() +
+  labs(title = "Distribution of Ethnicity (RIDRETH1 version)",
+       x = "Ethnicity", y = "Count", fill = "Ethnicity") +
+  theme(legend.position = "none")
+p_eth1
+
+ggsave(here("figures", "ethnicity1_distribution.png"), p_eth1, width = 6, height = 4)
+```
+
+## Ethnicity: variable 2 (RIDRETH3)
+
+```{r ex2-eth2}
+n_missing_eth2 <- sum(is.na(nhanes$ethnicity_2))
+n_missing_eth2
+
+p_eth2 <- ggplot(nhanes, aes(x = ethnicity_2, fill = ethnicity_2)) +
+  geom_bar() +
+  labs(title = "Distribution of Ethnicity (RIDRETH3 version)",
+       x = "Ethnicity", y = "Count", fill = "Ethnicity") +
+  theme(legend.position = "none")
+p_eth2
+
+ggsave(here("figures", "ethnicity2_distribution.png"), p_eth2, width = 6, height = 4)
+```
+
+Both ethnicity variables are dominated by the White category, followed by Black and Mexican participants, and neither has any missing values. The two variables differ mainly in how the remaining participants are grouped: the 5-category version (`ethnicity_1`) lumps every non-White/Black/Mexican/Other-Hispanic participant into a single "Other" category, while the 6-category version (`ethnicity_2`) carves the Asian participants (n = 3,284) out of that catch-all group.
+
+## Which ethnicity variable to keep
+
+`ethnicity_2` is the more appropriate variable to retain, because it separates Asian participants into their own category instead of folding a large, distinct population into an uninformative "Other" bucket. Keeping `ethnicity_1` would obscure real between-group differences for Asian participants in any later analysis. `ethnicity_1` is therefore dropped from the working dataset.
+
+```{r ex2-remove}
+nhanes <- nhanes %>% select(-ethnicity_1)
+```
+
+# Exercise 3: Improving a ggplot figure
+
+## Critique of the original figure
+
+The goal of the figure is to show how each participant's weight changed over the 4-month diet, specifically relative to their own starting (week 0) weight. The colleague's figure falls short of that goal in several ways:
+
+- **Too many indistinguishable colours.** With 20 participants mapped to 20 different hues, several lines (e.g., the flat lines around 65, 78, 88, and 97 kg) are rendered in nearly identical shades of blue/teal, making it impossible to tell which participant is which without constantly cross-referencing the legend.
+- **The legend takes up as much space as the plot itself**, and its order (2, 3, 4, ..., 20) does not correspond to the vertical order of the lines, so matching a line to its label requires real effort.
+- **The y-axis shows absolute weight, not change from baseline.** Because participants start at very different weights (roughly 65-100 kg), it is hard to compare how much each person's weight changed.
+- **There is no reference point for "no change,"** so the one thing the figure should communicate is left for the reader to compute mentally.
+
+## Building the improved figure
+
+The improved figure re-expresses weight as change from baseline (so every participant starts at 0), adds a reference line at zero, and splits participants into small multiples with `facet_wrap()` instead of relying on 20 colours and a legend.
+
+```{r ex3-improved}
+diet <- import(here("data", "diet.csv"))
+
+diet <- diet %>%
+  group_by(Participant) %>%
+  mutate(
+    baseline_weight = case_when(
+      Week == 0 ~ Weight,
+      TRUE      ~ NA_real_
+    ),
+    baseline_weight = max(baseline_weight, na.rm = TRUE),
+    weight_change   = Weight - baseline_weight
+  ) %>%
+  ungroup() %>%
+  mutate(Participant = factor(Participant,
+                              levels = sort(unique(Participant))))
+
+fig3 <- ggplot(diet, aes(x = Week, y = weight_change, group = Participant)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_line(color = "steelblue", linewidth = 0.8) +
+  facet_wrap(~ Participant, ncol = 5) +
+  labs(title = "Change in Body Weight Relative to Baseline (Week 0)",
+       subtitle = "Each panel is one participant, followed over 16 weeks on the diet",
+       x = "Week", y = "Weight change from baseline (kg)") +
+  theme_minimal() +
+  theme(strip.text = element_text(face = "bold"),
+        panel.grid.minor = element_blank())
+fig3
+
+ggsave(here("figures", "diet_weight_change_faceted.png"), fig3, width = 10, height = 8)
+```
+
+## Interpretation of the improved figure
+
+The faceted version makes each participant's own trend immediately readable against the zero line, at the cost of no longer overlaying all 20 trajectories in one panel. For this dataset that trade-off is worth it, because tracing 20 overlapping lines was the original figure's main problem. Most participants show a downward trend, consistent with weight loss on the diet, while a small number show flat or slightly increasing trajectories.
+
+# Exercise 4: Exploring relationships through visualizations
+
+## The analysis sample
+
+A single blood pressure reading can be noisy, so I begin by averaging each participant's up to four systolic readings, treating a participant as missing only if none of the four were recorded. I then restrict the analysis to participants with complete information on age, gender, and this average, because those three variables anchor every plot that follows.
+
+```{r ex4-avg-filter}
+nhanes <- nhanes %>%
+  mutate(
+    avg_sbp = rowMeans(cbind(systolic_bp_1, systolic_bp_2,
+                             systolic_bp_3, systolic_bp_4),
+                       na.rm = TRUE),
+    avg_sbp = ifelse(is.nan(avg_sbp), NA, avg_sbp)
+  )
+
+n_before <- nrow(nhanes)
+nhanes_final <- nhanes %>%
+  filter(!is.na(age), !is.na(gender), !is.na(avg_sbp))
+n_after <- nrow(nhanes_final)
+n_before
+n_after
+```
+
+The sample drops from 29,400 to 21,604 participants: a loss of 7,796, or 26.5%, almost entirely because blood pressure was not recorded for every participant. Each remaining participant's average is then grouped into the standard clinical bands, and their age is banded into the same categories used throughout the assignment.
+
+```{r ex4-cat}
+nhanes_final <- nhanes_final %>%
+  mutate(
+    bp_category = case_when(
+      avg_sbp < 120                     ~ "Normal",
+      avg_sbp >= 120 & avg_sbp < 130    ~ "Elevated",
+      avg_sbp >= 130 & avg_sbp < 140    ~ "Stage 1 hypertension",
+      avg_sbp >= 140                    ~ "Stage 2 hypertension",
+      TRUE                              ~ NA_character_
+    ),
+    bp_category = factor(bp_category,
+                         levels = c("Normal", "Elevated",
+                                    "Stage 1 hypertension",
+                                    "Stage 2 hypertension")),
+
+    age_cat = case_when(
+      age <  18            ~ "0-17",
+      age >= 18 & age < 25 ~ "18-24",
+      age >= 25 & age < 40 ~ "25-39",
+      age >= 40 & age < 60 ~ "40-59",
+      age >= 60            ~ "60+",
+      TRUE                 ~ NA_character_
+    ),
+    age_cat = factor(age_cat,
+                     levels = c("0-17", "18-24", "25-39", "40-59", "60+"))
+  )
+
+table(nhanes_final$bp_category)
+table(nhanes_final$age_cat)
+```
+
+## The distribution of blood pressure
+
+The final sample is dominated by "Normal" readings, and gender remains close to evenly split even after the missing-data filtering. Most of the sample loss comes out of the youngest age group: children are far more likely to be missing a blood pressure reading than adults, so the age distribution of the final sample is noticeably shifted older than that of the full dataset.
+
+```{r ex4-step4}
+p_bp_counts <- ggplot(nhanes_final, aes(x = bp_category, fill = bp_category)) +
+  geom_bar() +
+  scale_fill_brewer(palette = "YlOrRd") +
+  labs(title = "Blood Pressure Category in the Final Sample",
+       x = "Category", y = "Count") +
+  theme_minimal() +
+  theme(legend.position = "none")
+p_bp_counts
+
+p_gender_final <- ggplot(nhanes_final, aes(x = gender, fill = gender)) +
+  geom_bar() +
+  labs(title = "Gender Distribution in the Final Sample",
+       x = "Gender", y = "Count", fill = "Gender") +
+  theme_minimal()
+p_gender_final
+
+p_age_final <- ggplot(nhanes_final, aes(x = age)) +
+  geom_histogram(binwidth = 5, boundary = 0, fill = "darkorange", color = "white") +
+  labs(title = paste0("Final Sample (n=", n_after, ")"),
+       x = "Age (years)", y = "Count")
+
+plot_grid(p_age + labs(title = paste0("Full Sample (n=", n_before, ")")),
+          p_age_final, ncol = 2)
+```
+
+## Blood pressure across age and gender
+
+The final visualization shows how the distribution of blood pressure categories shifts across age groups, separately for men and women.
+
+```{r ex4-step5}
+p_relationship <- ggplot(nhanes_final, aes(x = bp_category, fill = bp_category)) +
+  geom_bar() +
+  facet_grid(gender ~ age_cat) +
+  scale_fill_brewer(palette = "YlOrRd", name = "BP Category") +
+  labs(title = "Blood Pressure Category by Age Group and Gender",
+       x = NULL, y = "Count") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        strip.text = element_text(face = "bold"))
+p_relationship
+```
+
+Across nearly every age-by-gender panel, "Normal" is the most common category among children and young adults, and the balance steadily tips toward "Elevated" and both hypertension stages with increasing age, a pattern that appears for both men and women. The shift is most visible past age 40: the 40-59 and 60+ panels show a much larger share of Stage 1 and Stage 2 hypertension than the 18-24 and 25-39 panels, consistent with the well-documented rise in blood pressure with age. Men show a somewhat larger hypertensive share than women within the same age group, particularly in the 40-59 category, though "Normal" remains common in both.
